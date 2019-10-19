@@ -1,3 +1,6 @@
+dotenv
+pandas
+requests
 # local package
 -e .
 
