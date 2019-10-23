@@ -1,10 +1,7 @@
-# -*- coding: utf-8 -*-
-import logging
 import requests
 import pandas as pd
-from pathlib import Path
-from dotenv import find_dotenv, load_dotenv
 
+save_path = input("Where would you like the file to be saved?: ")
 
 url_list = []
 for year in range(2009,2019):
@@ -126,19 +123,11 @@ def main(urls):
 
     df = pd.DataFrame(data)
     df.columns = final_columns
-    df.to_csv("../data/interim/game_data.csv", index=False)
-
-    logger = logging.getLogger(__name__)
-    logger.info('making final data set from raw data')
 
     return df
 
 
 if __name__ == '__main__':
-    log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.basicConfig(level=logging.INFO, format=log_fmt)
 
-    # not used in this stub but often useful for finding various files
-    project_dir = Path(__file__).resolve().parents[2]
-
-    main(url_list)
+    df = main(url_list)
+    df.to_csv(save_path, index=False)

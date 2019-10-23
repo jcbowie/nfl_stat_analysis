@@ -1,18 +1,22 @@
 import pandas as pd
-from pprint import pprint as pp
-import datetime as dt
 from sklearn import preprocessing
 
-df = pd.read_csv("../data/interim/game_data_full.csv")
-df_reg = df.loc[df['seasonType'] == "REG"]
+data_to_be_cleaned = input("File path to the data that needs to be cleaned (The path should begin with '../../data/': ")
+data_type = input('Is this {history} data or {current} data? ')
+save_path = input("File path to where you want the data to be saved (The path should begin with '../../data/': ")
+df = pd.read_csv(data_to_be_cleaned)
 
-for col, col_data in df_reg.iteritems():
-    nan_count = col_data.isna().sum()
-    if nan_count > 0:
-        if col == "siteState":
-            continue
-        else:
-            df_reg = df_reg.drop(col, axis=1)
+if 'seasonType' in df.columns:
+    df_reg = df.loc[df['seasonType'] == "REG"]
+    for col, col_data in df_reg.iteritems():
+        nan_count = col_data.isna().sum()
+        if nan_count > 0:
+            if col == "siteState":
+                continue
+            else:
+                df_reg = df_reg.drop(col, axis=1)
+else:
+    df_reg = df
             
 df_reg = df_reg.reset_index()
 df_reg = df_reg.drop('index', axis=1)
@@ -93,7 +97,7 @@ mapping_dictionary = {
     'Tampa': 38,
     'Toronto': 39,
     'Twickenham': 40,
-    nan: 23,
+    'Tottenham': 41,
     'AZ': 12,
     'CA': 15,
     'CO': 21,
@@ -136,10 +140,11 @@ mapping_dictionary = {
     '22:15:00': 6,
     '22:20:00': 14,
     '23:35:00': 17,
-    '9:30:00': 19
+    '9:30:00': 19,
+    'REG': 1
 }
 
-columns_to_keep = ['season', 'week', 'gameTimeEastern', 'homeNickname', 'visitorNickname', 'siteId', 'siteCity',
+columns_to_keep = ['gameDate', 'season', 'week', 'siteId', 'gameTimeEastern', 'homeNickname', 'visitorNickname', 'siteCity',
                    'siteState', 'roofType', 'visitorTeamScore', 'homeTeamScore', 'HfirstDownsTotal',
                    'HfirstDownsByRushing', 'HfirstDownsByPassing', 'HfirstdownsByPenalty', 'HthirdDownAttempted',
                    'HthirdDownMade', 'HfourthDownAttempted', 'HfourthDownMade', 'HoffensiveYardsTotal',
@@ -173,7 +178,8 @@ columns_to_keep = ['season', 'week', 'gameTimeEastern', 'homeNickname', 'visitor
                    'VtotalPointsScored', 'VtimeOfPossSeconds']
 
 columns_not_standardized = ['gameDate', 'gameTimeEastern', 'homeNickname', 'visitorNickname',
-                            'siteCity', 'siteState', 'roofType']
+                            'siteCity', 'siteState', 'roofType', 'season', 'week', 'siteId']
+
 
 def get_outcomes(df_row):
     if df_row['visitorTeamScore'] == df_row['homeTeamScore']:
@@ -185,41 +191,51 @@ def get_outcomes(df_row):
     return value
 
 
-def main(df):
-    df_clean = df[columns_to_keep]
-    df_clean.to_csv("../data/processed/game_data_clean(reg).csv", index=False)
+def main(df, data_type):
+    df_clean = df
 
     for col, col_data in df_clean.iteritems():
         if df[col].dtype == object:
             if "_" in str(col_data[0]):
                 df_clean = df_clean.drop(col, axis=1)
+                columns_to_keep.remove(col)
 
     df_mapped = df_clean.replace(mapping_dictionary)
     df_objects = df_mapped[columns_not_standardized]
-    df_mapped = df_mapped.drop(columns_not_standardized, axis=1)
-    df_mapped['outcomes'] = df_mapped.apply(get_outcomes, axis=1)
-    df_outcomes = df_mapped['outcomes']
-    df_mapped = df_mapped.drop('outcomes', axis=1)
-    df_columns = df_mapped.columns
 
+    for column in columns_not_standardized:
+        if column not in df_mapped.columns:
+            columns_not_standardized.remove(column)
 
-    scaler = preprocessing.MinMaxScaler()
-    df_mapped_array = scaler.fit_transform(df_mapped)
-    df_standard = pd.DataFrame(df_mapped_array)
-    df_standard.columns = df_columns
+    if data_type == 'history':
+        df_mapped['outcomes'] = df_mapped.apply(get_outcomes, axis=1)
+        df_outcomes = df_mapped['outcomes']
+        df_mapped = df_mapped.drop('outcomes', axis=1)
+        df_mapped = df_mapped.drop(columns_not_standardized, axis=1)
+        df_columns = df_mapped.columns
+        scaler = preprocessing.MinMaxScaler()
+        df_mapped_array = scaler.fit_transform(df_mapped)
+        df_standard = pd.DataFrame(df_mapped_array)
+        df_standard.columns = df_columns
+        df_final = pd.merge(df_objects, df_standard, left_index=True, right_index=True)
+        df_final = pd.merge(df_final, df_outcomes, left_index=True, right_index=True)
+        df_final = df_final[columns_to_keep]
 
-    df_final = pd.merge(df_objects, df_standard, left_index=True, right_index=True)
-    df_final = pd.merge(df_final, df_outcomes, left_index=True, right_index=True)
+    else:
+        df_final = df_mapped
+        df_final = df_final[columns_to_keep]
     
     return df_final
 
 
 if __name__ == '__main__':
-    log_fmt = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.basicConfig(level=logging.INFO, format=log_fmt)
 
-    # not used in this stub but often useful for finding various files
-    project_dir = Path(__file__).resolve().parents[2]
+    final = main(df_reg, data_type)
+    final.to_csv(save_path, index=False)
 
-    df_final = main(df_reg)
-    df_final.to_csv("../data/processed/final_standardized_data.csv", index=False)
+    # ../../data/interim/game_data_regular_season.csv
+    # ../../data/processed/test_final_standardized_history_data.csv
+
+    # ../../data/interim/2019_schedule.csv
+    # ../../data/processed/test_final_standardized_data.csv
+    # ../../ data / processed / standardized_current.csv
